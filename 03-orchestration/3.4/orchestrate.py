@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import scipy
 import sklearn
+from prefect.artifacts import create_markdown_artifact
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.metrics import mean_squared_error
 import mlflow
@@ -11,7 +12,7 @@ import xgboost as xgb
 from prefect import flow, task
 
 
-@task(retries=3, retry_delay_seconds=2)
+@task(retries=3, retry_delay_seconds=2, name="Read taxi data")
 def read_data(filename: str) -> pd.DataFrame:
     """Read data into DataFrame"""
     df = pd.read_parquet(filename)
@@ -106,18 +107,25 @@ def train_best_model(
         mlflow.log_artifact("models/preprocessor.b", artifact_path="preprocessor")
 
         mlflow.xgboost.log_model(booster, artifact_path="models_mlflow")
+
+        create_markdown_artifact(key="taxis-rmse", markdown=f"""
+            | RMSE |
+            |------|
+            | {rmse:.2f} |
+        """)
+
     return None
 
 
 @flow
 def main_flow(
-    train_path: str = "./data/green_tripdata_2021-01.parquet",
-    val_path: str = "./data/green_tripdata_2021-02.parquet",
+    train_path: str = "./data/green_tripdata_2022-01.parquet",
+    val_path: str = "./data/green_tripdata_2022-02.parquet",
 ) -> None:
     """The main training pipeline"""
 
     # MLflow settings
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    mlflow.set_tracking_uri("http://127.0.0.1:5000/")
     mlflow.set_experiment("nyc-taxi-experiment")
 
     # Load
